@@ -1,3 +1,7 @@
+# IDE directories
+.idea
+cmake-build-*
+
 # Build directories
 build/
 builds/
@@ -17,4 +21,3 @@ builds/
 
 # Misc
 *.DS_Store
-

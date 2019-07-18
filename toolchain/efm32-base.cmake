@@ -12,6 +12,7 @@ message("Device: ${DEVICE}")
 
 # Convert to upper case
 string(TOUPPER ${DEVICE} DEVICE_U)
+string(TOLOWER ${DEVICE} DEVICE_L)
 message("Processor: ${DEVICE_U}")
 
 # Determine device family by searching for an appropriate device directory
@@ -19,7 +20,7 @@ set(DEVICE_FOUND FALSE)
 set(TEMP_DEVICE "${DEVICE_U}")
 
 while (NOT DEVICE_FOUND)
-    if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../device/${TEMP_DEVICE}")
+    if (EXISTS "${DEVICE_ROOT}/${TEMP_DEVICE}")
         set(DEVICE_FOUND TRUE)
     else ()
         string(LENGTH ${TEMP_DEVICE} TEMP_DEVICE_LEN)
@@ -69,8 +70,8 @@ endif ()
 
 # Set compiler flags
 # Common arguments
-add_definitions("-D${DEVICE}")
-set(COMMON_DEFINITIONS "-Wextra -Wall -Wno-unused-parameter -mcpu=cortex-${CPU_TYPE} -mthumb -fno-builtin -ffunction-sections -fdata-sections -fomit-frame-pointer ${OPTIONAL_DEBUG_SYMBOLS}")
+add_definitions("-D${DEVICE}=1")
+set(COMMON_DEFINITIONS "-Wextra -Wall -Wno-unused-parameter -mcpu=cortex-${CPU_TYPE} -O2 -mfpu=fpv4-sp-d16 -mfloat-abi=softfp -mthumb -fmessage-length=0 -ffunction-sections -fdata-sections -fomit-frame-pointer ${OPTIONAL_DEBUG_SYMBOLS}")
 set(DEPFLAGS "-MMD -MP")
 
 # Enable FLTO optimization if required
@@ -81,15 +82,15 @@ else ()
 endif ()
 
 # Build flags
-set(CMAKE_C_FLAGS "-std=gnu99 ${COMMON_DEFINITIONS} ${CPU_FIX} --specs=nano.specs ${DEPFLAGS}")
+set(CMAKE_C_FLAGS "-std=c99 ${COMMON_DEFINITIONS} ${CPU_FIX} --specs=nano.specs ${DEPFLAGS}")
 set(CMAKE_CXX_FLAGS "${COMMON_DEFINITIONS} ${CPU_FIX} --specs=nano.specs ${DEPFLAGS}")
 set(CMAKE_ASM_FLAGS "${COMMON_DEFINITIONS} -x assembler-with-cpp -DLOOP_ADDR=0x8000")
 
 # Set default inclusions
-set(LIBS ${LIBS} -lgcc -lc -lnosys -lgcc -lc -lnosys)
+set(LIBS ${LIBS} -lgcc -lc -lnosys)
 
 # Debug Flags
-set(COMMON_DEBUG_FLAGS "-O0 -g -gdwarf-2")
+set(COMMON_DEBUG_FLAGS "-g -gdwarf-2")
 set(CMAKE_C_FLAGS_DEBUG "${COMMON_DEBUG_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG "${COMMON_DEBUG_FLAGS}")
 set(CMAKE_ASM_FLAGS_DEBUG "${COMMON_DEBUG_FLAGS}")

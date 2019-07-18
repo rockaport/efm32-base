@@ -1,72 +1,125 @@
-//EFM32 blink test
+/***************************************************************************//**
+ * @file
+ * @brief Silabs HTM IAS and Beaconing Demo Application
+ * This application is intended to be used with the iOS Silicon Labs
+ * app for demonstration purposes
+ *******************************************************************************
+ * # License
+ * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
+ *******************************************************************************
+ *
+ * The licensor of this software is Silicon Laboratories Inc. Your use of this
+ * software is governed by the terms of Silicon Labs Master Software License
+ * Agreement (MSLA) available at
+ * www.silabs.com/about-us/legal/master-software-license-agreement. This
+ * software is distributed to you in Source Code format and is governed by the
+ * sections of the MSLA applicable to Source Code.
+ *
+ ******************************************************************************/
 
-#ifndef LED_PIN
-#define LED_PIN     4
-#endif
-#ifndef LED_PORT
-#define LED_PORT    gpioPortA
-#endif
+#include "init_mcu.h"
+#include "init_board.h"
+#include "init_app.h"
+#include "ble-configuration.h"
+#include "board_features.h"
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include "em_device.h"
-#include "em_chip.h"
-#include "em_cmu.h"
+/* BG stack headers */
+#include "bg_types.h"
+#include "native_gecko.h"
+#include "gatt_db.h"
+
+/* application specific files */
+#include "app.h"
+
+/* libraries containing default gecko configuration values */
 #include "em_emu.h"
-#include "em_gpio.h"
+#include "em_cmu.h"
 
-volatile uint32_t msTicks; /* counts 1ms timeTicks */
+/* Device initialization header */
+#include "hal-config.h"
 
-void Delay(uint32_t dlyTicks);
+#if defined(HAL_CONFIG)
 
-/**************************************************************************//**
- * @brief SysTick_Handler
- * Interrupt Service Routine for system tick counter
- *****************************************************************************/
-void SysTick_Handler(void)
-{
-    msTicks++;       /* increment counter necessary in Delay()*/
-}
+#include "bsphalconfig.h"
 
-/**************************************************************************//**
- * @brief Delays number of msTick Systicks (typically 1 ms)
- * @param dlyTicks Number of ticks to delay
- *****************************************************************************/
-void Delay(uint32_t dlyTicks)
-{
-    uint32_t curTicks;
+#else
+#include "bspconfig.h"
+#endif
 
-    curTicks = msTicks;
-    while ((msTicks - curTicks) < dlyTicks) ;
-}
+#include "bsp.h"
 
-/**************************************************************************//**
- * @brief  Main function
- *****************************************************************************/
-int main(void)
-{
-    CHIP_Init();
+/***********************************************************************************************//**
+ * @addtogroup Application
+ * @{
+ **************************************************************************************************/
 
-    CMU_ClockEnable(cmuClock_GPIO, true);
+/***********************************************************************************************//**
+ * @addtogroup app
+ * @{
+ **************************************************************************************************/
 
-    /* Setup SysTick Timer for 1 msec interrupts  */
-    if (SysTick_Config(CMU_ClockFreqGet(cmuClock_CORE) / 1000)) while (1) ;
+#ifndef MAX_CONNECTIONS
+#define MAX_CONNECTIONS 4
+#endif
+uint8_t bluetooth_stack_heap[DEFAULT_BLUETOOTH_HEAP(MAX_CONNECTIONS)];
 
-    /* Initialize LED driver */
-    GPIO_PinModeSet(LED_PORT, LED_PIN, gpioModePushPull, 0);
+// Gecko configuration parameters (see gecko_configuration.h)
+static const gecko_configuration_t config = {
+        .config_flags = 0,
+#if defined(FEATURE_LFXO)
+        .sleep.flags = SLEEP_FLAGS_DEEP_SLEEP_ENABLE,
+#else
+        .sleep.flags = 0,
+#endif // LFXO
+        .bluetooth.max_connections = MAX_CONNECTIONS,
+        .bluetooth.heap = bluetooth_stack_heap,
+        .bluetooth.heap_size = sizeof(bluetooth_stack_heap),
+        .bluetooth.sleep_clock_accuracy = 100, // ppm
+        .gattdb = &bg_gattdb_data,
+        .ota.flags = 0,
+        .ota.device_name_len = 3,
+        .ota.device_name_ptr = "OTA",
+#if (HAL_PA_ENABLE)
+        .pa.config_enable = 1, // Set this to be a valid PA config
+#if defined(FEATURE_PA_INPUT_FROM_VBAT)
+        .pa.input = GECKO_RADIO_PA_INPUT_VBAT, // Configure PA input to VBAT
+#else
+        .pa.input = GECKO_RADIO_PA_INPUT_DCDC,
+#endif // defined(FEATURE_PA_INPUT_FROM_VBAT)
+#endif // (HAL_PA_ENABLE)
+        .rf.flags = GECKO_RF_CONFIG_ANTENNA,                 /* Enable antenna configuration. */
+        .rf.antenna = GECKO_RF_ANTENNA,                      /* Select antenna path! */
+};
 
-    GPIO_PinOutSet(LED_PORT, LED_PIN);
+int main(void) {
+    // Initialize device
+    initMcu();
+    // Initialize board
+    initBoard();
+    // Initialize application
+    initApp();
 
-    printf("test");
+    // Initialize LEDs
+    BSP_LedsInit();
 
-    /* Infinite blink loop */
-    while (1)
-    {
-        Delay(1000);
-        GPIO_PinOutToggle(LED_PORT, LED_PIN);
+#ifndef FEATURE_LED_BUTTON_ON_SAME_PIN
+    // Configure pin as input
+    GPIO_PinModeSet(BSP_BUTTON0_PORT, BSP_BUTTON0_PIN, gpioModeInput, 1);
+    // Configure pin as input
+    GPIO_PinModeSet(BSP_BUTTON1_PORT, BSP_BUTTON1_PIN, gpioModeInput, 1);
+#endif
+
+    // Initialize stack
+    gecko_init(&config);
+
+    while (1) {
+        struct gecko_cmd_packet *evt;
+        // Check for stack event.
+        evt = gecko_wait_event();
+        // Run application and event handler.
+        appHandleEvents(evt);
     }
 }
 
-
-
+/** @} (end addtogroup app) */
+/** @} (end addtogroup Application) */
